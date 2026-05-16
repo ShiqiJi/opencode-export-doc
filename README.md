@@ -12,7 +12,15 @@ OpenCode plugin that provides export-documentation loading for dependency module
 
 ## Installing
 
-Copy `export-doc.ts` into your OpenCode plugins directory, or configure `opencode.json` to point to it.
+ - Copy `export-doc.ts` into your OpenCode plugins directory;
+  
+ - You can also reference the GitHub repository directly:
+```json
+{
+  //.config\opencode\opencode.json
+  "plugin": ["github:ShiqiJi/opencode-export-doc"]
+}
+```
 
 ## Configuration
 
