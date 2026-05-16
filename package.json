@@ -1,0 +1,16 @@
+{
+  "name": "opencode-export-doc",
+  "version": "1.0.0",
+  "description": "OpenCode plugin — export documentation with dependency interface loading",
+  "type": "module",
+  "exports": {
+    "./server": "./export-doc.ts"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  },
+  "engines": {
+    "opencode": ">=1.14"
+  },
+  "license": "MIT"
+}
