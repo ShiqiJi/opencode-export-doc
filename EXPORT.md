@@ -122,6 +122,7 @@ Send a mail message to a dependency module's mailbox. Creates a mail file in the
 | Param | Type | Description |
 |-------|------|-------------|
 | `module` | `string` | Target module name from available dependency exports list |
+| `title` | `string` | Mail title (single line) |
 | `content` | `string` | Mail body content |
 
 ### Returns
@@ -133,12 +134,11 @@ Confirmation string with the relative path to the created mail file.
 
 ### Mail file format
 ```
-# Mail from {sender} to {target}
-**Date:** {ISO timestamp}
-**From:** {sender}
-**To:** {target}
-
-{content}
+Time: {ISO timestamp}
+From: {sender}
+To: {target}
+Title: {single-line title}
+Content: {single-line content}
 ```
 
 File naming: `{ISO-safe}_{sender}.md` in `.xtconfig/mailbox/` of the target module.

@@ -406,6 +406,7 @@ export default {
           description: MAIL_SEND_TOOL_DESCRIPTION,
           args: {
             module: tool.schema.string().describe(TOOL_MODULE_ARG_DESC),
+            title: tool.schema.string().describe("Mail title (single line)"),
             content: tool.schema.string().describe(MAIL_CONTENT_ARG_DESC),
           },
           async execute(args) {
@@ -435,13 +436,13 @@ export default {
             const filename = `${ts}_${sender}.md`
             const filePath = path.join(mailboxDir, filename)
 
+            const date = new Date().toISOString()
             const mailContent = [
-              `# Mail from ${sender} to ${args.module}`,
-              `**Date:** ${new Date().toISOString()}`,
-              `**From:** ${sender}`,
-              `**To:** ${args.module}`,
-              "",
-              args.content,
+              `Time: ${date}`,
+              `From: ${sender}`,
+              `To: ${args.module}`,
+              `Title: ${args.title}`,
+              `Content: ${args.content.replace(/\n/g, " ")}`,
             ].join("\n")
 
             await fs.writeFile(filePath, mailContent + "\n", "utf-8")
