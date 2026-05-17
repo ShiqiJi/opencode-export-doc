@@ -1,6 +1,6 @@
 {
   "name": "opencode-export-doc",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OpenCode plugin — export documentation with dependency interface loading",
   "type": "module",
   "exports": {

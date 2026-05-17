@@ -1,7 +1,7 @@
 ---
 name: export-doc
 description: OpenCode plugin that loads dependency export documentation so agents can correctly call external modules without guessing signatures, endpoints, or types.
-version: 1.0.0
+version: 1.1.0
 whenToUse: When configuring OpenCode plugins, loading API docs for dependency modules, or reading allowed source files from a dependency's exports list.
 exports: ./export-doc.ts, ./package.json
 ---
@@ -25,11 +25,12 @@ The `server` function receives `{ directory: string }` and returns:
   tool: {
     load_export_doc: ToolDefinition,
     read_dep_source: ToolDefinition,
+    mail_send: ToolDefinition,
   }
 }
 ```
 
-All returned fields are optional; the plugin works with partial returns (`export-doc.ts:305-405`).
+All returned fields are optional; the plugin works with partial returns (`export-doc.ts:316-463`).
 
 ## Configuration file
 
@@ -46,7 +47,7 @@ Path: `.xtconfig/dependencies.json` (`export-doc.ts:29`)
 - `name` (string): module identifier used in `load_export_doc` tool calls.
 - `path` (string): relative or absolute filesystem path, or http/https URL to the module root.
 
-The file is auto-created with `{ "modules": [] }` if missing (`export-doc.ts:296-301`).
+The file is auto-created with `{ "modules": [] }` if missing (`export-doc.ts:307-312`).
 
 ## Dependency EXPORT.md format
 
@@ -63,12 +64,12 @@ exports: ./index.ts, ./types.ts
 ```
 
 Required frontmatter fields:
-- `name` — module identifier (falls back to directory basename if omitted, `export-doc.ts:145-146`)
-- `exports` — comma-separated paths starting with `./`; the allowlist for `read_dep_source` (`export-doc.ts:131-139`)
+- `name` — module identifier (falls back to directory basename if omitted, `export-doc.ts:156-157`)
+- `exports` — comma-separated paths starting with `./`; the allowlist for `read_dep_source` (`export-doc.ts:142-150`)
 
 The body after `---` is the human-readable export documentation.
 
-## Tool: `load_export_doc` (`export-doc.ts:314-345`)
+## Tool: `load_export_doc` (`export-doc.ts:325-356`)
 
 ### Description
 Load the complete export documentation for an external dependency module. Must be called BEFORE any code that imports, calls, or integrates with a dependency.
@@ -93,7 +94,7 @@ Exports: `./file1.ts, ./file2.ts`
 - `Module "{name}" not found. Available: ...` — when module not in dependency list.
 - `HTTP {status}` — when remote fetch fails.
 
-## Tool: `read_dep_source` (`export-doc.ts:347-385`)
+## Tool: `read_dep_source` (`export-doc.ts:358-396`)
 
 ### Description
 Read raw content of a file listed in a dependency module's `exports` field. Only files in the exports list are accessible.
@@ -112,15 +113,45 @@ Raw file content as string (UTF-8).
 - `Cannot read source files from remote modules` — remote (http/https) dependencies are not supported.
 - `File "{file}" is not in the exports list...` — path not in the module's `exports` field.
 
+## Tool: `mail_send` (`export-doc.ts:398-443`)
+
+### Description
+Send a mail message to a dependency module's mailbox. Creates a mail file in the target module's `.xtconfig/mailbox/` directory. The file includes the sender module name, timestamp, and the message content.
+
+### Parameters
+| Param | Type | Description |
+|-------|------|-------------|
+| `module` | `string` | Target module name from available dependency exports list |
+| `content` | `string` | Mail body content |
+
+### Returns
+Confirmation string with the relative path to the created mail file.
+
+### Errors
+- `Module "{name}" not found. Available: ...` — when module not in dependency list.
+- `Cannot send mail to remote modules` — remote (http/https) dependencies do not support mail.
+
+### Mail file format
+```
+# Mail from {sender} to {target}
+**Date:** {ISO timestamp}
+**From:** {sender}
+**To:** {target}
+
+{content}
+```
+
+File naming: `{ISO-safe}_{sender}.md` in `.xtconfig/mailbox/` of the target module.
+
 ## Hooks
 
-### `command.execute.before` (`export-doc.ts:307-310`)
+### `command.execute.before` (`export-doc.ts:318-321`)
 Triggers on `/init` command. Injects the AGENTS.md/EXPORT.md creation prompt into the output stream.
 
-### `experimental.chat.system.transform` (`export-doc.ts:389-405`)
+### `experimental.chat.system.transform` (`export-doc.ts:446-462`)
 On every chat turn:
 1. Reads local `EXPORT.md` and injects it into system prompt (prefixed with `Instructions from: EXPORT.md`).
-2. Injects the `SYNC_INSTRUCTION` reminder to keep `EXPORT.md` accurate.
+2. Injects the `SYNC_INSTRUCTION` reminder to keep `EXPORT.md` accurate and to never modify other modules' code (use `mail_send` instead).
 3. Formats and injects the dependency list from `dependencies.json` (recursively resolved).
 
 ## Types
@@ -145,8 +176,8 @@ interface ExportDoc {
 
 ## Internal functions (for reference)
 
-### `loadRecursive(deps, baseDir, visited, docs, dirMap): Promise<void>` (`export-doc.ts:188-235`)
+### `loadRecursive(deps, baseDir, visited, docs, dirMap): Promise<void>` (`export-doc.ts:199-246`)
 Recursively loads EXPORT.md from each dependency. For local deps, also reads their `dependencies.json` to discover transitive dependencies. Skipped deps and HTTP errors are silently ignored.
 
-### `reloadState(root, state): Promise<boolean>` (`export-doc.ts:247-273`)
+### `reloadState(root, state): Promise<boolean>` (`export-doc.ts:258-284`)
 Reloads dependency state when `dependencies.json` mtime changes. Returns `true` on successful reload.

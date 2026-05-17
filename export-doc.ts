@@ -28,6 +28,7 @@ interface ExportDoc {
 
 const CONFIG_FILE = ".xtconfig/dependencies.json"
 const EXPORT_FILE = "EXPORT.md"
+const MAILBOX_DIR = ".xtconfig/mailbox"
 
 const INIT_PROMPT = [
   "",
@@ -77,6 +78,10 @@ const SYNC_INSTRUCTION = [
   "If you modify any interfaces, exports, endpoints, schemas, or module contracts",
   "mentioned in `EXPORT.md`, you MUST update the file to keep it accurate.",
   "Update the `version` field when breaking changes are introduced.",
+  "",
+  "IMPORTANT: You must NEVER modify code in other modules.",
+  "If another module needs code changes, use the `mail_send` tool to send a mail",
+  "to that module with a description of the required changes.",
 ].join("\n")
 
 const TOOL_DESCRIPTION = [
@@ -110,6 +115,16 @@ const READ_SOURCE_TOOL_DESCRIPTION = [
 
 const READ_SOURCE_FILE_ARG_DESC =
   "Relative file path from the module's exports list (must match exactly)"
+
+const MAIL_SEND_TOOL_DESCRIPTION = [
+  "Send a mail message to a dependency module's mailbox.",
+  "",
+  "Creates a mail file in the target module's `.xtconfig/mailbox/` directory.",
+  "The file includes the sender module name, timestamp, and the message content.",
+  "Use this for inter-module communication within a dependency graph.",
+].join("\n")
+
+const MAIL_CONTENT_ARG_DESC = "Mail body content"
 
 const DEP_HEADER_PREFIX = [
   "",
@@ -221,6 +236,7 @@ async function loadRecursive(
 
       if (!/^https?:\/\//i.test(resolved)) {
         dirMap.set(dep.name, resolved)
+        await fs.mkdir(path.join(resolved, MAILBOX_DIR), { recursive: true }).catch(() => {})
         try {
           const childRaw = await fs.readFile(path.join(resolved, CONFIG_FILE), "utf-8")
           const childCfg = JSON.parse(childRaw)
@@ -300,6 +316,8 @@ export default {
       } catch { /* fs error */ }
     }
 
+    await fs.mkdir(path.join(root, MAILBOX_DIR), { recursive: true }).catch(() => {})
+
     console.log(`[export-doc] loaded — ${state.depDocs.length} deps: ${state.depDocs.map((d) => d.name).join(", ") || "(none)"}`)
 
     return {
@@ -311,7 +329,7 @@ export default {
 
       // ── Custom tools ──
       tool: {
-        load_export_doc: tool({
+        xt_graph_load_export_doc: tool({
           description: TOOL_DESCRIPTION,
           args: {
             module: tool.schema.string().describe(TOOL_MODULE_ARG_DESC),
@@ -344,7 +362,7 @@ export default {
           },
         }),
 
-        read_dep_source: tool({
+        xt_graph_read_dep_source: tool({
           description: READ_SOURCE_TOOL_DESCRIPTION,
           args: {
             module: tool.schema.string().describe(TOOL_MODULE_ARG_DESC),
@@ -381,6 +399,53 @@ export default {
 
             const filePath = path.join(doc.dir, args.file)
             return fs.readFile(filePath, "utf-8")
+          },
+        }),
+
+        xt_graph_mail_send: tool({
+          description: MAIL_SEND_TOOL_DESCRIPTION,
+          args: {
+            module: tool.schema.string().describe(TOOL_MODULE_ARG_DESC),
+            content: tool.schema.string().describe(MAIL_CONTENT_ARG_DESC),
+          },
+          async execute(args) {
+            await reloadState(root, state)
+
+            const target = state.depDocs.find((d) => d.name === args.module)
+            if (!target) {
+              const available = state.depDocs.map((d) => d.name).join(", ")
+              throw new Error(`Module "${args.module}" not found. Available: ${available || "none"}`)
+            }
+
+            if (/^https?:\/\//i.test(target.dir)) {
+              throw new Error("Cannot send mail to remote modules")
+            }
+
+            let sender = "unknown"
+            try {
+              const localExport = await fs.readFile(path.join(root, EXPORT_FILE), "utf-8")
+              const base = parseFrontmatter(localExport, root)
+              sender = base.name || "unknown"
+            } catch {}
+
+            const mailboxDir = path.join(target.dir, MAILBOX_DIR)
+            await fs.mkdir(mailboxDir, { recursive: true })
+
+            const ts = new Date().toISOString().replace(/[:.]/g, "-")
+            const filename = `${ts}_${sender}.md`
+            const filePath = path.join(mailboxDir, filename)
+
+            const mailContent = [
+              `# Mail from ${sender} to ${args.module}`,
+              `**Date:** ${new Date().toISOString()}`,
+              `**From:** ${sender}`,
+              `**To:** ${args.module}`,
+              "",
+              args.content,
+            ].join("\n")
+
+            await fs.writeFile(filePath, mailContent + "\n", "utf-8")
+            return `Mail sent to "${args.module}" — ${path.relative(root, filePath)}`
           },
         }),
       },
